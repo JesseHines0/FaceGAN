@@ -1,11 +1,11 @@
 import json
 import os
 from PIL import Image
+from imageUtils import *
 
 dirname = os.path.dirname(__file__)
 annotationsFilename = f"{dirname}/Data/COCO/annotations-trainval/instances_train2017.json"
 imagesDir = f"{dirname}/Data/COCO/images-train/"
-targetDims = (336, 280)
 
 fetchedMap = None
 def getData():
@@ -80,35 +80,6 @@ def getImagesInCategory(category, filterImages = False):
 
     return imagesInCat
 
-def boxesOverlap(a, b):
-    return (
-        # (x, y, width, height)
-        # Dist between    < width/height of first box.
-        (abs(a[0] - b[0]) < min(a, b, key = lambda box: box[0])[2]) and
-        (abs(a[1] - b[1]) < min(a, b, key = lambda box: box[1])[3])
-    )
-
-def resizeImage(image):
-    """ Resizes the image to targetDims, leaving padding where needed. Returns resized image."""
-    ratioX = targetDims[0] / image.size[0]
-    ratioY = targetDims[1] / image.size[1]
-    ratio  = min(ratioX, ratioY)
-
-    newSize = ( int(ratio * image.size[0]), int(ratio * image.size[1]) )
-
-    # thumbnail is inplace
-    resizedImage = image.resize(newSize, Image.ANTIALIAS)
-
-    # create a new image and paste the resized on it
-    paddedImage = Image.new("RGB", targetDims)
-    paddedImage.paste(resizedImage, (
-        (targetDims[0] - newSize[0]) // 2,
-        (targetDims[1] - newSize[1]) // 2
-    ))
-
-    return paddedImage
-
-
 def processImagesForCategory(category, destination):
     catsToFetch = getCategoryIds(category)
     images = getImages()
@@ -140,8 +111,7 @@ def processImagesForCategory(category, destination):
         
         img = Image.open( imagesDir + images[ image_id ] )
         for objIndex, obj in enumerate(objects):
-            bbox = obj['bbox']
-            croppedImage = img.crop( (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]) )
+            croppedImage = cropImageToBbox(img, obj['bbox'])
 
             resizedImage = resizeImage(croppedImage)
 
