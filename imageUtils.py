@@ -35,4 +35,3 @@ def resizeImage(image):
 def cropImageToBbox(image, bbox):
     """ Crops image to (x, y, width, height) bbox """
     return image.crop( (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]) )
-    

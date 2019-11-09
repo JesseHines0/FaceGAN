@@ -7,45 +7,40 @@ from imageUtils import *
 
 api = "http://visualgenome.org/api/v0/"
 dirname = os.path.dirname(__file__)
-regionsFilename = f"{dirname}/Data/VisualGenome/region_descriptions.json"
-
-def getAllImageIds():
-    allIds = []
-    nextPage = api + "images/all"
-    while (nextPage):
-        result = requests.get(nextPage).json()
-        allIds.extend(result["results"])
-        nextPage = result["next"]
-        print(nextPage)
-    return allIds
+objectsFilename = f"{dirname}/Data/VisualGenome/objects.json"
 
 def getImagesByQuery(query, destination):
-    file = open(regionsFilename)
-    imageRegions = json.load(file)
+    file = open(objectsFilename)
+    imageObjects = json.load(file)
+    file.close()
     print("JSON LOADED")
 
     query = query.lower()
     queryResults = {}
-    # queryResults will be a map of imageId : region Containing the largest region in each image that matches query 
+    # queryResults will be a map of imageId : region Containing the largest region in each image that matches query
     # and is at least half targetDiminsions
-    for img in imageRegions: 
-        for region in img['regions']:
-            largest = None
-            if (query in region['phrase'].lower() and
-                region['width'] >= targetDims[0] // 2 and region['height'] >= targetDims[1] // 2 and 
-                (largest == None or region['width'] * region['height'] > largest['width'] * largest['height'])
+    for img in imageObjects:
+        largest = None
+        for obj in img['objects']:
+            if (any( (query in name) for name in obj['names'] ) and
+                obj['w'] >= targetDims[0] // 2 and obj['h'] >= targetDims[1] // 2 and
+                (largest == None or obj['w'] * obj['h'] > largest['w'] * largest['h'])
             ):
-                largest = region
+                largest = obj
         if (largest):
-            queryResults[img['id']] = largest
+            queryResults[img['image_id']] = largest
 
     if not os.path.exists(destination):
         os.makedirs(destination)
     cocoDuplicateCount = 0
-    for imageId, region in queryResults.items():
+    for imageId, obj in queryResults.items():
         imageData = requests.get(api + f"images/{imageId}").json()
         if imageData['coco_id'] == None:
             image = Image.open( BytesIO( requests.get(imageData['url']).content ) )
+
+            image = cropImageToBbox(image, (obj['x'], obj['y'], obj['w'], obj['h']) )
+            image = resizeImage(image)
+
             image.save( os.path.join(destination, f"{imageId:08}.jpg") )
         else:
             cocoDuplicateCount += 1

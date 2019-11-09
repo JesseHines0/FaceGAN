@@ -26,7 +26,7 @@ def getCategories():
         if cat['supercategory'] not in catMap:
             catMap[cat['supercategory']] = []
         catMap[cat['supercategory']].append( (cat['id'], cat['name']) )
-    
+
     return catMap
 
 def getCategoryIds(category):
@@ -39,7 +39,7 @@ def getCategoryIds(category):
             matching = list( filter(lambda t: t[1] == category, catMap[superCat]) )
             if matching:
                 return [matching[0][0]]
-            
+
 def getImages():
     """ Returns the images as a map of "id" to "filename" """
     imagesMap = {}
@@ -64,7 +64,7 @@ def getImagesInCategory(category, filterImages = False):
     category is the name of a category. If filter is true, it will remove images that have crowds or more than one category.
     """
     catsToFetch = getCategoryIds(category)
-    
+
     # fetch images for category
     allImages = getImages()
     imagesInCat = []
@@ -87,7 +87,7 @@ def processImagesForCategory(category, destination):
 
     if not os.path.exists(destination):
         os.makedirs(destination)
-        
+
     for image_index, (image_id, anns) in enumerate(imageAnns.items()):
         if (image_index % 1000 == 0):
             print(f"Processing image {image_index} of {len(images)}...")
@@ -108,7 +108,7 @@ def processImagesForCategory(category, destination):
                         break
                 else: # no collisions
                     objects.append(ann)
-        
+
         img = Image.open( imagesDir + images[ image_id ] )
         for objIndex, obj in enumerate(objects):
             croppedImage = cropImageToBbox(img, obj['bbox'])
@@ -117,6 +117,6 @@ def processImagesForCategory(category, destination):
 
             sub = chr(97 + objIndex) if objIndex < 26 else f"sub{objIndex}"
             resizedImage.save( os.path.join(destination, f"{images[image_id].rsplit('.', 1)[0]}{sub}.jpg") )
-           
+
     print("DONE!")
 
