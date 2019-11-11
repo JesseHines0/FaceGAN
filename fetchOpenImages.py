@@ -55,17 +55,18 @@ def getImages():
             })
         yield (subset, currentImage, currentAnns)
 
-def fetchImagesByCategory(category, destination):
-    category = getCategories()[category.lower()]
+def batchImagesForCategory(categoryID, batchSize = 6):
+    """ Generator that returns batches of [(subset, imageID, objectsInImage)] that match category. """
 
-    for subset, imageId, anns in getImages():
+    batch = [] # [(subset, imageID, objects)]
+    for subset, imageID, anns in getImages():
         # get all objects matching category out of the image and crop each of them to their bbox.
         # Fetch them, and save each to a different image different image.
         # Exclude any objects that have bbox overlap with another.
         # Exclude any objects smaller than half targetSize
         objects = []
         for ann in anns:
-            if (ann['LabelName'] == category and
+            if (ann['LabelName'] == categoryID and
                 not ann['IsDepiction'] and not ann['IsInside'] and not ann['IsGroupOf']
             ):
                 for otherAnn in anns: # collision check
@@ -78,10 +79,23 @@ def fetchImagesByCategory(category, destination):
                     objects.append(ann)
 
         if objects:
-            os.system( # Download
-                f'aws s3 --no-sign-request cp s3://open-images-dataset/{subset}/{imageId}.jpg "{destination}/"'
-            )
+            batch.append((subset, imageID, objects))
 
+        if len(batch) >= batchSize:
+            yield batch
+            batch = []
+
+    if batch:
+        yield batch
+
+
+def fetchImagesByCategory(category, destination):
+    category = getCategories()[category.lower()]
+
+    for batch in batchImagesForCategory(category, batchSize=6):
+        command = [f'aws s3 --no-sign-request --only-show-errors cp s3://open-images-dataset/{img[0]}/{img[1]}.jpg "{destination}/" & ' for img in batch]
+        os.system( ''.join(command) + "wait" ) # download
+        for subset, imageId, objects in batch:
             # Crop objects out of image.
             img = Image.open( f"{destination}/{imageId}.jpg" )
             objIndex = 0
@@ -93,8 +107,7 @@ def fetchImagesByCategory(category, destination):
                 if bbox[2] >= targetDims[0] // 2 and bbox[3] >= targetDims[1] // 2:
                     croppedImage = cropImageToBbox(img, bbox)
                     resizedImage = resizeImage(croppedImage)
-                    sub = chr(97 + objIndex) if objIndex < 26 else f"sub{objIndex}"
-                    resizedImage.save( f"{destination}/{imageId}{sub}.jpg" )
+                    resizedImage.save( f"{destination}/{imageId}-sub{objIndex}.jpg" )
                     objIndex += 1
 
             img.close()
