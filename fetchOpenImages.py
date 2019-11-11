@@ -1,16 +1,101 @@
 import os
+import csv
+from PIL import Image
+from imageUtils import *
 
 dirname = os.path.dirname(__file__)
+classFile = f"{dirname}/Data/OpenImages/class-descriptions-boxable.csv"
+annotationsFiles = {
+    "test"      : f"{dirname}/Data/OpenImages/test-annotations-bbox.csv",
+    "train"     : f"{dirname}/Data/OpenImages/train-annotations-bbox.csv",
+    "validation": f"{dirname}/Data/OpenImages/validation-annotations-bbox.csv"
+}
 
-def fetchImagesForClass(classname):
-    classname = classname.replace(' ', '_')
-    os.chdir(f"{dirname}/OIDv4_ToolKit") # Change working directory
+categories = {}
+def getCategories():
+    global categories
+    if not categories:
+        file = open(classFile)
+        for line in csv.reader(file):
+            categories[line[1].lower()] = line[0]
+        file.close()
+    return categories
 
-    # Download images with bounding boxes.
-    os.system(f"python3 main.py downloader -y --classes {classname} --type_csv all --n_threads 3 " +
-               "--image_IsOccluded 0 --image_IsTruncated 0 --image_IsGroupOf 0 --image_IsDepiction 0 --image_IsInside 0" # filter unusual images.
-    )
-    # Download images without bounding boxes.
-    os.system(f"python3 main.py downloader_ill -y --sub h --classes {classname} --type_csv all --n_threads 3")
+def getImages():
+    """ Returns a generator that returns tuples of (subset, imageId, [annotations]) """
+    for subset, file in annotationsFiles.items():
+        file = open(file)
+        #    0   ,   1   ,     2    ,     3     ,  4     5     6     7        8            9          10          11          12
+        # ImageID, Source, LabelName, Confidence, XMin, XMax, YMin, YMax, IsOccluded, IsTruncated, IsGroupOf, IsDepiction, IsInside
+        reader = csv.reader(file); next(reader) # skip header
 
+        # Annotations for the same image come in sequence. So yield the batches one at a time instead of loading
+        # the whole thing in memory at once.
+        currentImage = None
+        currentAnns = []
+        for line in reader:
+            if (line[0] != currentImage):
+                if (currentImage != None):
+                    yield (subset, currentImage, currentAnns)
+                currentImage = line[0]
+                currentAnns = []
+            currentAnns.append({
+                "Source"     : line[1],
+                "LabelName"  : line[2],
+                "Confidence" : line[3],
+                "xNorm"      : float(line[4]),
+                "yNorm"      : float(line[6]),
+                "wNorm"      : float(line[5]) - float(line[4]),
+                "hNorm"      : float(line[7]) - float(line[6]),
+                "IsOccluded" : bool(int(line[8])),
+                "IsTruncated": bool(int(line[9])),
+                "IsGroupOf"  : bool(int(line[10])),
+                "IsDepiction": bool(int(line[11])),
+                "IsInside"   : bool(int(line[12])),
+            })
+        yield (subset, currentImage, currentAnns)
 
+def fetchImagesByCategory(category, destination):
+    category = getCategories()[category.lower()]
+
+    for subset, imageId, anns in getImages():
+        # get all objects matching category out of the image and crop each of them to their bbox.
+        # Fetch them, and save each to a different image different image.
+        # Exclude any objects that have bbox overlap with another.
+        # Exclude any objects smaller than half targetSize
+        objects = []
+        for ann in anns:
+            if (ann['LabelName'] == category and
+                not ann['IsDepiction'] and not ann['IsInside'] and not ann['IsGroupOf']
+            ):
+                for otherAnn in anns: # collision check
+                    if (ann is not otherAnn and boxesOverlap(
+                        (ann['xNorm'],      ann['yNorm'],      ann['wNorm'],      ann['hNorm']),
+                        (otherAnn['xNorm'], otherAnn['yNorm'], otherAnn['wNorm'], otherAnn['hNorm'])
+                    )):
+                        break
+                else: # no collisions
+                    objects.append(ann)
+
+        if objects:
+            os.system( # Download
+                f'aws s3 --no-sign-request cp s3://open-images-dataset/{subset}/{imageId}.jpg "{destination}/"'
+            )
+
+            # Crop objects out of image.
+            img = Image.open( f"{destination}/{imageId}.jpg" )
+            objIndex = 0
+            for obj in objects:
+                bbox = (
+                    obj['xNorm'] * img.size[0], obj['yNorm'] * img.size[1],
+                    obj['wNorm'] * img.size[0], obj['hNorm'] * img.size[1]
+                )
+                if bbox[2] >= targetDims[0] // 2 and bbox[3] >= targetDims[1] // 2:
+                    croppedImage = cropImageToBbox(img, bbox)
+                    resizedImage = resizeImage(croppedImage)
+                    sub = chr(97 + objIndex) if objIndex < 26 else f"sub{objIndex}"
+                    resizedImage.save( f"{destination}/{imageId}{sub}.jpg" )
+                    objIndex += 1
+
+            img.close()
+            os.remove(f"{destination}/{imageId}.jpg") # Remove original image
