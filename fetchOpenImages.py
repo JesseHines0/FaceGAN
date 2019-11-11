@@ -10,6 +10,11 @@ annotationsFiles = {
     "train"     : f"{dirname}/Data/OpenImages/train-annotations-bbox.csv",
     "validation": f"{dirname}/Data/OpenImages/validation-annotations-bbox.csv"
 }
+imageMetadataFiles = {
+    "test"      : f"{dirname}/Data/OpenImages/test-images-with-rotation.csv",
+    "train"     : f"{dirname}/Data/OpenImages/train-images-boxable-with-rotation.csv",
+    "validation": f"{dirname}/Data/OpenImages/validation-images-with-rotation.csv"
+}
 
 categories = {}
 def getCategories():
@@ -55,8 +60,24 @@ def getImages():
             })
         yield (subset, currentImage, currentAnns)
 
+imageRotations = {}
+def getImageRotations():
+    global imageRotations
+
+    if not imageRotations:
+        for file in imageMetadataFiles.values():
+            file = open(file)
+            #    0   ,   1   ,      2     ,          3        ,    4   ,         5       ,   6   ,   7  ,      8      ,      9     ,         10      ,    11
+            # ImageID, Subset, OriginalURL, OriginalLandingURL, License, AuthorProfileURL, Author, Title, OriginalSize, OriginalMD5, Thumbnail300KURL, Rotation
+            reader = csv.reader(file); next(reader) # skip header
+
+            for line in reader:
+                imageRotations[ line[0] ] = 0 if line[11] == "" else int(float(line[11]))
+    return imageRotations
+
 def batchImagesForCategory(categoryID, batchSize = 6):
     """ Generator that returns batches of [(subset, imageID, objectsInImage)] that match category. """
+    imageRotations = getImageRotations()
 
     batch = [] # [(subset, imageID, objects)]
     for subset, imageID, anns in getImages():
@@ -67,7 +88,8 @@ def batchImagesForCategory(categoryID, batchSize = 6):
         objects = []
         for ann in anns:
             if (ann['LabelName'] == categoryID and
-                not ann['IsDepiction'] and not ann['IsInside'] and not ann['IsGroupOf']
+                not ann['IsDepiction'] and not ann['IsInside'] and not ann['IsGroupOf'] and
+                imageRotations[imageID] == 0 # Not rotated
             ):
                 for otherAnn in anns: # collision check
                     if (ann is not otherAnn and boxesOverlap(
@@ -92,7 +114,7 @@ def batchImagesForCategory(categoryID, batchSize = 6):
 def fetchImagesByCategory(category, destination):
     category = getCategories()[category.lower()]
 
-    for batch in batchImagesForCategory(category, batchSize=6):
+    for batch in batchImagesForCategory(category, batchSize=8):
         command = [f'aws s3 --no-sign-request --only-show-errors cp s3://open-images-dataset/{img[0]}/{img[1]}.jpg "{destination}/" & ' for img in batch]
         os.system( ''.join(command) + "wait" ) # download
         for subset, imageId, objects in batch:
