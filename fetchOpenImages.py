@@ -91,14 +91,14 @@ def batchImagesForCategory(categoryID, batchSize = 6):
                 not ann['IsDepiction'] and not ann['IsInside'] and not ann['IsGroupOf'] and
                 imageRotations[imageID] == 0 # Not rotated
             ):
-                for otherAnn in anns: # collision check
-                    if (ann is not otherAnn and boxesOverlap(
-                        (ann['xNorm'],      ann['yNorm'],      ann['wNorm'],      ann['hNorm']),
-                        (otherAnn['xNorm'], otherAnn['yNorm'], otherAnn['wNorm'], otherAnn['hNorm'])
-                    )):
-                        break
-                else: # no collisions
-                    objects.append(ann)
+                # for otherAnn in anns: # collision check
+                #     if (ann is not otherAnn and boxesOverlap(
+                #         (ann['xNorm'],      ann['yNorm'],      ann['wNorm'],      ann['hNorm']),
+                #         (otherAnn['xNorm'], otherAnn['yNorm'], otherAnn['wNorm'], otherAnn['hNorm'])
+                #     )):
+                #         break
+                # else: # no collisions
+                objects.append(ann)
 
         if objects:
             batch.append((subset, imageID, objects))
