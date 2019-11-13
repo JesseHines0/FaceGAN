@@ -110,16 +110,20 @@ def batchImagesForCategory(categoryID, batchSize = 6):
     if batch:
         yield batch
 
-
-def fetchImagesByCategory(category, destination):
+def fetchCategory(category, destination):
     category = getCategories()[category.lower()]
 
-    for batch in batchImagesForCategory(category, batchSize=8):
-        command = [f'aws s3 --no-sign-request --only-show-errors cp s3://open-images-dataset/{img[0]}/{img[1]}.jpg "{destination}/" & ' for img in batch]
+    for batchIndex, batch in enumerate( batchImagesForCategory(category, batchSize=8) ):
+        if (batchIndex % 5 == 0):
+            print(f"Processing batch {batchIndex}")
+        options = "--no-sign-request --only-show-errors"
+        command = [
+            f'aws s3 {options} cp s3://open-images-dataset/{img[0]}/{img[1]}.jpg "{destination}/OpenImages-{img[1]}.jpg" & 'for img in batch
+        ]
         os.system( ''.join(command) + "wait" ) # download
         for subset, imageId, objects in batch:
             # Crop objects out of image.
-            img = Image.open( f"{destination}/{imageId}.jpg" )
+            img = Image.open( f"{destination}/OpenImages-{imageId}.jpg" )
             objIndex = 0
             for obj in objects:
                 bbox = (
@@ -129,8 +133,10 @@ def fetchImagesByCategory(category, destination):
                 if bbox[2] >= targetDims[0] // 2 and bbox[3] >= targetDims[1] // 2:
                     croppedImage = cropImageToBbox(img, bbox)
                     resizedImage = resizeImage(croppedImage)
-                    resizedImage.save( f"{destination}/{imageId}-sub{objIndex}.jpg" )
+                    resizedImage.save( f"{destination}/OpenImages-{imageId}-sub{objIndex}.jpg" )
                     objIndex += 1
 
             img.close()
-            os.remove(f"{destination}/{imageId}.jpg") # Remove original image
+            os.remove(f"{destination}/OpenImages-{imageId}.jpg") # Remove original image
+
+    print(f"DONE! Fetched images for {category} from OpenImages.")

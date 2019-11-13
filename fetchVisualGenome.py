@@ -9,20 +9,22 @@ api = "http://visualgenome.org/api/v0/"
 dirname = os.path.dirname(__file__)
 objectsFilename = f"{dirname}/Data/VisualGenome/objects.json"
 
-def getImagesByQuery(query, destination):
+def fetchCategory(category, destination):
     file = open(objectsFilename)
     imageObjects = json.load(file)
     file.close()
     print("JSON LOADED")
 
-    query = query.lower()
+    category = category.lower()
     queryResults = {}
-    # queryResults will be a map of imageId : region Containing the largest region in each image that matches query
+    # queryResults will be a map of imageId : region Containing the largest region in each image that matches category
     # and is at least half targetDiminsions
-    for img in imageObjects:
+    for imageIndex, img in enumerate(imageObjects):
+        if (imageIndex % 1000 == 0):
+            print(f"Processing image {imageIndex} of {len(imageObjects)}...")
         largest = None
         for obj in img['objects']:
-            if (any( (query in name) for name in obj['names'] ) and
+            if (any( (category in name) for name in obj['names'] ) and
                 obj['w'] >= targetDims[0] // 2 and obj['h'] >= targetDims[1] // 2 and
                 (largest == None or obj['w'] * obj['h'] > largest['w'] * largest['h'])
             ):
@@ -41,9 +43,8 @@ def getImagesByQuery(query, destination):
             image = cropImageToBbox(image, (obj['x'], obj['y'], obj['w'], obj['h']) )
             image = resizeImage(image)
 
-            image.save( os.path.join(destination, f"{imageId:08}.jpg") )
+            image.save( f"{destination}/VisualGenome-{imageId:08}.jpg" )
         else:
             cocoDuplicateCount += 1
 
-    print("Done!")
-    print(f"{len(queryResults) - cocoDuplicateCount} images saved. {cocoDuplicateCount} matching images also in COCO database not saved.")
+    print(f"DONE! Processed {len(queryResults) - cocoDuplicateCount} images from Visual Genome. {cocoDuplicateCount} matching images also in COCO database not saved.")

@@ -58,29 +58,7 @@ def getImageAnnotations():
         imagesMap[ annotation['image_id'] ].append(annotation)
     return imagesMap
 
-def getImagesInCategory(category, filterImages = False):
-    """
-    Returns a list of file objects for all images matching category or one of its sub-categories in the COCO dataset.
-    category is the name of a category. If filter is true, it will remove images that have crowds or more than one category.
-    """
-    catsToFetch = getCategoryIds(category)
-
-    # fetch images for category
-    allImages = getImages()
-    imagesInCat = []
-    imageAnnotations = getImageAnnotations()
-
-    for image_id, annotations in imageAnnotations.items():
-        # filter out crowd images or images with multiple categories.
-        if (not filterImages) or (len(annotations) == 1 and annotations[0]['iscrowd'] == 0):
-            for annotation in annotations: # check if the categories match
-                if annotation['category_id'] in catsToFetch:
-                    imagesInCat.append( allImages[ image_id ] )
-                    break
-
-    return imagesInCat
-
-def processImagesForCategory(category, destination):
+def fetchCategory(category, destination):
     catsToFetch = getCategoryIds(category)
     images = getImages()
     imageAnns = getImageAnnotations()
@@ -116,7 +94,7 @@ def processImagesForCategory(category, destination):
             resizedImage = resizeImage(croppedImage)
 
             sub = chr(97 + objIndex) if objIndex < 26 else f"sub{objIndex}"
-            resizedImage.save( os.path.join(destination, f"{images[image_id].rsplit('.', 1)[0]}{sub}.jpg") )
+            resizedImage.save( f"{destination}/COCO-{images[image_id].rsplit('.', 1)[0]}{sub}.jpg" )
 
-    print("DONE!")
+    print(f"DONE! Processed all images of {category} in COCO database.")
 
