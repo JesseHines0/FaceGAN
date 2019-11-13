@@ -67,7 +67,7 @@ def fetchCategory(category, destination):
         os.makedirs(destination)
 
     for image_index, (image_id, anns) in enumerate(imageAnns.items()):
-        if (image_index % 1000 == 0):
+        if (image_index % 5000 == 0):
             print(f"Processing image {image_index} of {len(images)}...")
         # get all objects matching category out of the image and crop each of them to their bbox.
         # Saved each to different image.

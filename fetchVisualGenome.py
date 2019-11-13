@@ -20,7 +20,7 @@ def fetchCategory(category, destination):
     # queryResults will be a map of imageId : region Containing the largest region in each image that matches category
     # and is at least half targetDiminsions
     for imageIndex, img in enumerate(imageObjects):
-        if (imageIndex % 1000 == 0):
+        if (imageIndex % 5000 == 0):
             print(f"Processing image {imageIndex} of {len(imageObjects)}...")
         largest = None
         for obj in img['objects']:

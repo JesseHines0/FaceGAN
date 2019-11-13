@@ -114,7 +114,7 @@ def fetchCategory(category, destination):
     category = getCategories()[category.lower()]
 
     for batchIndex, batch in enumerate( batchImagesForCategory(category, batchSize=8) ):
-        if (batchIndex % 5 == 0):
+        if (batchIndex % 10 == 0):
             print(f"Processing batch {batchIndex}")
         options = "--no-sign-request --only-show-errors"
         command = [
