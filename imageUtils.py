@@ -1,8 +1,6 @@
 import os
 from PIL import Image
 
-targetDims = (336, 280)
-
 def boxesOverlap(a, b):
     """ Returns true if two (x, y, width, height) bounding boxes overlap """
     return (
@@ -12,7 +10,7 @@ def boxesOverlap(a, b):
         (abs(a[1] - b[1]) < min(a, b, key = lambda box: box[1])[3])
     )
 
-def resizeImage(image):
+def resizeImage(image, targetDims):
     """ Resizes the image to targetDims, leaving padding where needed. Returns resized image."""
     ratioX = targetDims[0] / image.size[0]
     ratioY = targetDims[1] / image.size[1]

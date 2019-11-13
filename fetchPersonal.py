@@ -4,7 +4,7 @@ from PIL import Image
 
 dirname = os.path.dirname(__file__)
 
-def fetchCategory(category, destination):
+def fetchCategory(category, targetDims, destination):
     folder = f"{dirname}/Data/Personal/{category.lower()}"
 
     if not os.path.exists(destination):
@@ -13,8 +13,11 @@ def fetchCategory(category, destination):
     if os.path.exists(folder):
         for file in os.listdir(folder):
             img = Image.open(f"{folder}/{file}")
-            resizedImage = resizeImage(img)
+            resizedImage = resizeImage(img, targetDims)
             resizedImage.save(f"{destination}/Personal-{file}")
             img.close()
 
-    print(f"DONE! Processed personal images of {category}.")
+        print(f"DONE! Processed personal images of {category}.")
+    else:
+        print(f"No personal images of {category}.")
+

@@ -30,7 +30,8 @@ def getCategories():
     return catMap
 
 def getCategoryIds(category):
-    """ returns a list containing the id of the category, or a list containing the ids of all subcategories """
+    """ returns a list containing the id of the category, or a list containing the ids of all subcategories.
+        Returns empty lists if no matching category. """
     catMap = getCategories()
     if category in catMap: # Supercategory
         return [cat['id'] for cat in catMap[category]]
@@ -39,6 +40,7 @@ def getCategoryIds(category):
             matching = list( filter(lambda t: t[1] == category, catMap[superCat]) )
             if matching:
                 return [matching[0][0]]
+    return []
 
 def getImages():
     """ Returns the images as a map of "id" to "filename" """
@@ -58,8 +60,12 @@ def getImageAnnotations():
         imagesMap[ annotation['image_id'] ].append(annotation)
     return imagesMap
 
-def fetchCategory(category, destination):
+def fetchCategory(category, targetDims, destination):
     catsToFetch = getCategoryIds(category)
+    if (catsToFetch == []):
+        print(f"No COCO images for {category}.")
+        return
+
     images = getImages()
     imageAnns = getImageAnnotations()
 
@@ -91,7 +97,7 @@ def fetchCategory(category, destination):
         for objIndex, obj in enumerate(objects):
             croppedImage = cropImageToBbox(img, obj['bbox'])
 
-            resizedImage = resizeImage(croppedImage)
+            resizedImage = resizeImage(croppedImage, targetDims)
 
             sub = chr(97 + objIndex) if objIndex < 26 else f"sub{objIndex}"
             resizedImage.save( f"{destination}/COCO-{images[image_id].rsplit('.', 1)[0]}{sub}.jpg" )

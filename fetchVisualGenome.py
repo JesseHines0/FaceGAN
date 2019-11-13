@@ -9,7 +9,7 @@ api = "http://visualgenome.org/api/v0/"
 dirname = os.path.dirname(__file__)
 objectsFilename = f"{dirname}/Data/VisualGenome/objects.json"
 
-def fetchCategory(category, destination):
+def fetchCategory(category, targetDims, destination):
     file = open(objectsFilename)
     imageObjects = json.load(file)
     file.close()
@@ -41,7 +41,7 @@ def fetchCategory(category, destination):
             image = Image.open( BytesIO( requests.get(imageData['url']).content ) )
 
             image = cropImageToBbox(image, (obj['x'], obj['y'], obj['w'], obj['h']) )
-            image = resizeImage(image)
+            image = resizeImage(image, targetDims)
 
             image.save( f"{destination}/VisualGenome-{imageId:08}.jpg" )
         else:

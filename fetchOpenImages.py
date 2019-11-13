@@ -110,10 +110,15 @@ def batchImagesForCategory(categoryID, batchSize = 6):
     if batch:
         yield batch
 
-def fetchCategory(category, destination):
-    category = getCategories()[category.lower()]
+def fetchCategory(category, targetDims, destination):
+    categories = getCategories()
+    if category.lower() not in categories:
+        print(f"No OpenImages images for {category}.")
+        return
 
-    for batchIndex, batch in enumerate( batchImagesForCategory(category, batchSize=8) ):
+    categoryCode = categories[category.lower()]
+
+    for batchIndex, batch in enumerate( batchImagesForCategory(categoryCode, batchSize=8) ):
         if (batchIndex % 10 == 0):
             print(f"Processing batch {batchIndex}")
         options = "--no-sign-request --only-show-errors"
@@ -132,7 +137,7 @@ def fetchCategory(category, destination):
                 )
                 if bbox[2] >= targetDims[0] // 2 and bbox[3] >= targetDims[1] // 2:
                     croppedImage = cropImageToBbox(img, bbox)
-                    resizedImage = resizeImage(croppedImage)
+                    resizedImage = resizeImage(croppedImage, targetDims)
                     resizedImage.save( f"{destination}/OpenImages-{imageId}-sub{objIndex}.jpg" )
                     objIndex += 1
 
