@@ -32,6 +32,7 @@ def getCategories():
 def getCategoryIds(category):
     """ returns a list containing the id of the category, or a list containing the ids of all subcategories.
         Returns empty lists if no matching category. """
+    category = category.lower()
     catMap = getCategories()
     if category in catMap: # Supercategory
         return [cat['id'] for cat in catMap[category]]
