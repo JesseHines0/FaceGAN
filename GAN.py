@@ -86,26 +86,26 @@ class GAN:
         """
         model = tf.keras.Sequential()
 
-        model.add(layers.Conv2D(1024, (5, 5), strides=(2, 2), padding='same',
+        model.add(layers.Conv2D(512, (5, 5), strides=(2, 2), padding='same',
                                     input_shape=[128, 128, 3]))
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.3))
-        assert model.output_shape == (None, 64, 64, 1024)
-
-        model.add(layers.Conv2D(512, (5, 5), strides=(2, 2), padding='same'))
-        model.add(layers.LeakyReLU())
-        model.add(layers.Dropout(0.3))
-        assert model.output_shape == (None, 32, 32, 512)
+        assert model.output_shape == (None, 64, 64, 512)
 
         model.add(layers.Conv2D(256, (5, 5), strides=(2, 2), padding='same'))
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.3))
-        assert model.output_shape == (None, 16, 16, 256)
+        assert model.output_shape == (None, 32, 32, 256)
 
         model.add(layers.Conv2D(128, (5, 5), strides=(2, 2), padding='same'))
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.3))
-        assert model.output_shape == (None, 8, 8, 128)
+        assert model.output_shape == (None, 16, 16, 128)
+
+        model.add(layers.Conv2D(64, (5, 5), strides=(2, 2), padding='same'))
+        model.add(layers.LeakyReLU())
+        model.add(layers.Dropout(0.3))
+        assert model.output_shape == (None, 8, 8, 64)
 
         model.add(layers.Flatten())
         model.add(layers.Dense(1))
@@ -193,8 +193,8 @@ class GAN:
             display.clear_output(wait=True)
             self.save_sample_images(epoch + 1)
 
-            # Save the model every 5 epochs
-            if (epoch + 1) % 5 == 0:
+            # Save the model every 1 epochs
+            if (epoch + 1) % 1 == 0:
                 self.checkpoint_manager.save()
 
             print (f"Time for Epoch {epoch + 1} is {time.time() - start} sec")
@@ -245,7 +245,7 @@ def load_data():
     """
     import matplotlib.pyplot as plt
 
-    BATCH_SIZE = 1
+    BATCH_SIZE = 128
 
     # Pull a list of file names matching a glob, in random order.
     image_datset = tf.data.Dataset.list_files(f"{base_dir}/Data/ProcessedImages/Giraffe/*")
