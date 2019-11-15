@@ -20,16 +20,24 @@ class GAN:
     # class variables
 
     # This method returns a helper function to compute cross entropy loss
-    _cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+    _cross_entropy = tf.keras.losses.BinaryCrossentropy(
+        from_logits=True,
+        label_smoothing=0.2, # Bends labels from 0 and 1 towards 0.5. This is supposed to help regularize somehow.
+    )
+    # A object that sets the initial random weights for the model.
+    # Recommended settings from https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/
+    _r_norm = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02)
 
-    def __init__(self, noise_dim = 100):
+    def __init__(self, noise_dim = 100, save_every=4):
         self.noise_dim = noise_dim
+        self.save_every = save_every
 
         self.generator = self._make_generator_model()
-        self.generator_optimizer = tf.keras.optimizers.Adam(1e-4)
+        # Recommended settings from https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/
+        self.generator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5)
 
         self.discriminator = self._make_discriminator_model()
-        self.discriminator_optimizer = tf.keras.optimizers.Adam(1e-4)
+        self.discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5)
 
         # For saving the model
         self.checkpoint = tf.train.Checkpoint(
@@ -47,34 +55,35 @@ class GAN:
         """
 
         model = tf.keras.Sequential()
-        model.add(layers.Dense(8*8*256, use_bias=False, input_shape=(self.noise_dim,)))
+        model.add(layers.Dense(8*8*256, use_bias=False, input_shape=(self.noise_dim,), kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
+        assert model.output_shape == (None, 8*8*256) # Note: None is the batch size
 
         model.add(layers.Reshape((8, 8, 256)))
-        assert model.output_shape == (None, 8, 8, 256) # Note: None is the batch size
+        assert model.output_shape == (None, 8, 8, 256)
 
-        model.add(layers.Conv2DTranspose(512, (5, 5), strides=(1, 1), padding='same', use_bias=False))
-        assert model.output_shape == (None, 8, 8, 512)
+        model.add(layers.Conv2DTranspose(512, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
+        assert model.output_shape == (None, 16, 16, 512)
 
-        model.add(layers.Conv2DTranspose(256, (5, 5), strides=(2, 2), padding='same', use_bias=False))
-        assert model.output_shape == (None, 16, 16, 256)
+        model.add(layers.Conv2DTranspose(256, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
+        assert model.output_shape == (None, 32, 32, 256)
 
-        model.add(layers.Conv2DTranspose(128, (5, 5), strides=(2, 2), padding='same', use_bias=False))
-        assert model.output_shape == (None, 32, 32, 128)
+        model.add(layers.Conv2DTranspose(128, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
+        assert model.output_shape == (None, 64, 64, 128)
 
-        model.add(layers.Conv2DTranspose(64, (5, 5), strides=(2, 2), padding='same', use_bias=False))
-        assert model.output_shape == (None, 64, 64, 64)
+        model.add(layers.Conv2DTranspose(64, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
+        assert model.output_shape == (None, 128, 128, 64)
 
-        model.add(layers.Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same', use_bias=False, activation='tanh'))
+        model.add(layers.Conv2DTranspose(3, (5, 5), strides=(1, 1), padding='same', use_bias=False, activation='tanh', kernel_initializer=GAN._r_norm))
         assert model.output_shape == (None, 128, 128, 3)
 
         return model
@@ -82,33 +91,44 @@ class GAN:
     def _make_discriminator_model(self):
         """
         Makes a discriminator model.
-        The model will take in an image, and return whether it thinks the image if fake (0) or real (1).
+        The model will take in an image, and return a logit of whether it thinks the image if fake (0) or real (1).
+        Run through sigmoid to get the final probability.
         """
         model = tf.keras.Sequential()
 
-        model.add(layers.Conv2D(512, (5, 5), strides=(2, 2), padding='same',
+        model.add(layers.Conv2D(64, (5, 5), strides=(1, 1), padding='same', kernel_initializer=GAN._r_norm,
                                     input_shape=[128, 128, 3]))
+        model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
-        model.add(layers.Dropout(0.3))
-        assert model.output_shape == (None, 64, 64, 512)
+        model.add(layers.Dropout(0.2))
+        assert model.output_shape == (None, 128, 128, 64)
 
-        model.add(layers.Conv2D(256, (5, 5), strides=(2, 2), padding='same'))
+        model.add(layers.Conv2D(128, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
+        model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
-        model.add(layers.Dropout(0.3))
+        model.add(layers.Dropout(0.2))
+        assert model.output_shape == (None, 64, 64, 128)
+
+        model.add(layers.Conv2D(256, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
+        model.add(layers.BatchNormalization())
+        model.add(layers.LeakyReLU())
+        model.add(layers.Dropout(0.2))
         assert model.output_shape == (None, 32, 32, 256)
 
-        model.add(layers.Conv2D(128, (5, 5), strides=(2, 2), padding='same'))
+        model.add(layers.Conv2D(512, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
+        model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
-        model.add(layers.Dropout(0.3))
-        assert model.output_shape == (None, 16, 16, 128)
+        model.add(layers.Dropout(0.2))
+        assert model.output_shape == (None, 16, 16, 512)
 
-        model.add(layers.Conv2D(64, (5, 5), strides=(2, 2), padding='same'))
+        model.add(layers.Conv2D(1024, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
+        model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
-        model.add(layers.Dropout(0.3))
-        assert model.output_shape == (None, 8, 8, 64)
+        model.add(layers.Dropout(0.2))
+        assert model.output_shape == (None, 8, 8, 1024)
 
         model.add(layers.Flatten())
-        model.add(layers.Dense(1))
+        model.add(layers.Dense(1, kernel_initializer=GAN._r_norm))
         assert model.output_shape == (None, 1)
 
         return model
@@ -142,6 +162,7 @@ class GAN:
         Preforms one training step on one batch. images is a tensor of real images.
         Will run the generator on noise, and the run the discriminator on the images given and the generator output,
         calculating loss of the generator based on how many of its fakes got past the discriminator.
+        Returns a tensor of (gen_loss, disc_loss)
         """
         noise = tf.random.normal([images.shape[0], self.noise_dim])
 
@@ -168,6 +189,8 @@ class GAN:
         self.generator_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
         self.discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator, self.discriminator.trainable_variables))
 
+        return tf.tuple([gen_loss, disc_loss])
+
     def train(self, dataset, epochs):
         """
         Trains the GAN for the given number of epochs, using the given dataset.
@@ -175,33 +198,40 @@ class GAN:
         Also saves a few sample images for each epoch.
         """
 
+        log_file = open(f"{base_dir}/training_log.txt", "a")
+
         self.checkpoint.restore(self.checkpoint_manager.latest_checkpoint)
         if self.checkpoint_manager.latest_checkpoint:
-            print(f"Restored from {self.checkpoint_manager.latest_checkpoint}")
+            log(log_file, f"Restored from {self.checkpoint_manager.latest_checkpoint}")
         else:
-            print("Initializing from scratch.")
+            log(log_file, "Initializing from scratch.")
 
-        print("Training...")
+        log(log_file, "Training...")
 
         for epoch in range(epochs):
             start = time.time()
 
+            loss_sums = [0, 0]
+            batches_in_epoch = 0
+
             for image_batch, label_batch in dataset:
-                self.train_step(image_batch)
+                losses = self.train_step(image_batch)
+                batches_in_epoch += 1
+                loss_sums[0] += losses[0]; loss_sums[1] += losses[1]
 
-            # Produce images for the GIF as we go
-            display.clear_output(wait=True)
-            self.save_sample_images(epoch + 1)
-
-            # Save the model every 1 epochs
-            if (epoch + 1) % 1 == 0:
+            # Save the model and sample images every couple epochs
+            if (epoch + 1) % self.save_every == 0:
                 self.checkpoint_manager.save()
+                self.save_sample_images(epoch + 1) # Produce sample_images
 
-            print (f"Time for Epoch {epoch + 1} is {time.time() - start} sec")
+            log(log_file, f"Time for Epoch {epoch + 1} is {time.time() - start} sec")
+            log(log_file, f"Average losses for Epoch {epoch + 1} (generator: {loss_sums[0]/batches_in_epoch}, discriminator: {loss_sums[1]/batches_in_epoch}).")
 
         # Save after the final epoch
         self.checkpoint_manager.save()
-        print("DONE!")
+
+        log(log_file, "DONE!")
+        log_file.close()
 
     def save_sample_images(self, epoch, sample_count = 4):
         """
@@ -220,6 +250,10 @@ class GAN:
             sub = "" if sample_count == 1 else chr(97 + index) if sample_count < 26 else f"-{index}"
             tf.io.write_file(f"{base_dir}/sample_images/generated_image_{now}_epoch{epoch}{sub}.jpg", image)
 
+def log(log_file, message):
+    """ Prints to console and logs to logfile. """
+    log_file.write(message)
+    print(message)
 
 def load_image(file_path):
     """
