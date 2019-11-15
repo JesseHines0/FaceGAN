@@ -45,26 +45,37 @@ class GAN:
         Creates a generator model.
         The model will take in a noise vector, and output an image.
         """
+
         model = tf.keras.Sequential()
-        model.add(layers.Dense(7*7*256, use_bias=False, input_shape=(self.noise_dim,)))
+        model.add(layers.Dense(8*8*256, use_bias=False, input_shape=(self.noise_dim,)))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
 
-        model.add(layers.Reshape((7, 7, 256)))
-        assert model.output_shape == (None, 7, 7, 256) # Note: None is the batch size
+        model.add(layers.Reshape((8, 8, 256)))
+        assert model.output_shape == (None, 8, 8, 256) # Note: None is the batch size
 
-        model.add(layers.Conv2DTranspose(128, (5, 5), strides=(1, 1), padding='same', use_bias=False))
-        assert model.output_shape == (None, 7, 7, 128)
+        model.add(layers.Conv2DTranspose(512, (5, 5), strides=(1, 1), padding='same', use_bias=False))
+        assert model.output_shape == (None, 8, 8, 512)
+        model.add(layers.BatchNormalization())
+        model.add(layers.LeakyReLU())
+
+        model.add(layers.Conv2DTranspose(256, (5, 5), strides=(2, 2), padding='same', use_bias=False))
+        assert model.output_shape == (None, 16, 16, 256)
+        model.add(layers.BatchNormalization())
+        model.add(layers.LeakyReLU())
+
+        model.add(layers.Conv2DTranspose(128, (5, 5), strides=(2, 2), padding='same', use_bias=False))
+        assert model.output_shape == (None, 32, 32, 128)
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
 
         model.add(layers.Conv2DTranspose(64, (5, 5), strides=(2, 2), padding='same', use_bias=False))
-        assert model.output_shape == (None, 14, 14, 64)
+        assert model.output_shape == (None, 64, 64, 64)
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
 
-        model.add(layers.Conv2DTranspose(1, (5, 5), strides=(2, 2), padding='same', use_bias=False, activation='tanh'))
-        assert model.output_shape == (None, 28, 28, 1)
+        model.add(layers.Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same', use_bias=False, activation='tanh'))
+        assert model.output_shape == (None, 128, 128, 3)
 
         return model
 
@@ -74,15 +85,31 @@ class GAN:
         The model will take in an image, and return whether it thinks the image if fake (0) or real (1).
         """
         model = tf.keras.Sequential()
-        model.add(layers.Conv2D(64, (5, 5), strides=(2, 2), padding='same',
-                                        input_shape=[28, 28, 1]))
+
+        model.add(layers.Conv2D(1024, (5, 5), strides=(2, 2), padding='same',
+                                    input_shape=[128, 128, 3]))
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.3))
+        assert model.output_shape == (None, 64, 64, 1024)
+
+        model.add(layers.Conv2D(512, (5, 5), strides=(2, 2), padding='same'))
+        model.add(layers.LeakyReLU())
+        model.add(layers.Dropout(0.3))
+        assert model.output_shape == (None, 32, 32, 512)
+
+        model.add(layers.Conv2D(256, (5, 5), strides=(2, 2), padding='same'))
+        model.add(layers.LeakyReLU())
+        model.add(layers.Dropout(0.3))
+        assert model.output_shape == (None, 16, 16, 256)
+
         model.add(layers.Conv2D(128, (5, 5), strides=(2, 2), padding='same'))
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.3))
+        assert model.output_shape == (None, 8, 8, 128)
+
         model.add(layers.Flatten())
         model.add(layers.Dense(1))
+        assert model.output_shape == (None, 1)
 
         return model
 
@@ -159,7 +186,7 @@ class GAN:
         for epoch in range(epochs):
             start = time.time()
 
-            for image_batch in dataset:
+            for image_batch, label_batch in dataset:
                 self.train_step(image_batch)
 
             # Produce images for the GIF as we go
@@ -193,24 +220,47 @@ class GAN:
             sub = "" if sample_count == 1 else chr(97 + index) if sample_count < 26 else f"-{index}"
             tf.io.write_file(f"{base_dir}/sample_images/generated_image_{now}_epoch{epoch}{sub}.jpg", image)
 
-BUFFER_SIZE = 60000
+
+def load_image(file_path):
+    """
+    Loads an image from a file path into a (tensor image, label) tuple.
+    Normalizes pixels into range [-1.0, 1.0]. Image directory determines the class label.
+    """
+    img = tf.io.read_file(file_path)
+    # convert the compressed string to a 3D uint8 tensor
+    img = tf.image.decode_jpeg(img, channels=3)
+
+    img = tf.dtypes.cast(img, tf.float32)
+    img = (img - 127.5) / 127.5 # normalize to [-1, 1] range.
+    # img = tf.image.resize(img, [128, 128])
+
+    parts = tf.strings.split(file_path, os.path.sep) # second to last is the directory, and will be used as class name.
+    label = tf.strings.lower(parts[-2])
+    return img, label
+
 def load_data():
     """
-    Returns the mminst dataset as a tf.data.Dataset
+    Returns image data as a tf.data.Dataset
+    Pulls data from the given folder.
     """
-    # load data. We don't need the test data and labels, because we aren't classifying things. We could merge them actually.
-    (train_images, train_labels), (_, _) = tf.keras.datasets.mnist.load_data()
+    import matplotlib.pyplot as plt
 
-    # train_images.append(test_images)
-    # train_images_labels.append(test_labels)
+    BATCH_SIZE = 1
 
-    train_images = train_images.reshape(train_images.shape[0], 28, 28, 1).astype('float32')
-    train_images = (train_images - 127.5) / 127.5 # Normalize the images to [-1, 1]
+    # Pull a list of file names matching a glob, in random order.
+    image_datset = tf.data.Dataset.list_files(f"{base_dir}/Data/ProcessedImages/Giraffe/*")
 
-    train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(BUFFER_SIZE).batch(256)
+    # Set `num_parallel_calls` so multiple images are loaded/processed in parallel.
+    # num_parallel_calls=tf.data.experimental.AUTOTUNE is supposed to let it adjust dynamically. However, it seems
+    # to eat all your memory and then crash.
+    image_datset = image_datset.map(load_image, num_parallel_calls=2)
 
-    return train_dataset
+    image_datset = image_datset.batch(BATCH_SIZE)
 
+    # `prefetch` lets the dataset fetch batches in the background while the model is training.
+    image_datset = image_datset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+
+    return image_datset
 
 gan = GAN()
 gan.train(load_data(), 50)
