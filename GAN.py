@@ -134,13 +134,17 @@ class GAN:
         return model
 
     @classmethod
-    def discriminator_loss(cls, real_output, fake_output):
+    def discriminator_loss(cls, real_output, fake_output, noise):
         """
         Determines the loss for the discriminator model.
         real_output is the discriminators output on real images, and fake_output is the discriminators output for fake images
         """
-        real_loss = cls._cross_entropy(tf.ones_like(real_output), real_output) # compare real_output against all 1s
-        fake_loss = cls._cross_entropy(tf.zeros_like(fake_output), fake_output)# compare fake_output against all 0s
+        real_labels = noisy_labels(1, real_output.shape, noise)
+        real_loss = cls._cross_entropy(real_labels, real_output) # compare real_output against all 1s + noise
+
+        fake_labels = noisy_labels(0, fake_output.shape, noise)
+        fake_loss = cls._cross_entropy(fake_labels, fake_output) # compare fake_output against all 0s + noise
+
         total_loss = real_loss + fake_loss
         return total_loss
 
@@ -157,7 +161,7 @@ class GAN:
     # see https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/autograph/g3doc/reference/limitations.md and
     # https://pgaleone.eu/tensorflow/tf.function/2019/03/21/dissecting-tf-function-part-1/ for limitations on this.
     @tf.function
-    def train_step(self, images):
+    def train_step(self, images, dscr_correct_prcnt):
         """
         Preforms one training step on one batch. images is a tensor of real images.
         Will run the generator on noise, and the run the discriminator on the images given and the generator output,
@@ -166,7 +170,29 @@ class GAN:
         """
         noise = tf.random.normal([images.shape[0], self.noise_dim])
 
-        # gradient tape records results from a function and calculates derivates for it.
+        # throttle = dscr_correct_prcnt > 0.80 # Throttle discriminator, its getting too good.
+
+        # if throttle:
+        #     # gradient tape records results from a function and calculates derivates for it.
+        #     with tf.GradientTape() as gen_tape:
+        #         # Run the generator
+        #         generated_images = self.generator(noise, training=True)
+
+        #         # Let the discriminator try to flag fakes out of our real images and our generated_images
+        #         # https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/ recommends not shuffling real and fake together.
+        #         real_output = self.discriminator(images,           training=False)
+        #         fake_output = self.discriminator(generated_images, training=False)
+
+        #         # Calculate the loss. We have to do this manually instead of letting keras do it for us with .fit(), since we have to determine the loss
+        #         # based of the discriminator's output.
+        #         gen_loss  = GAN.generator_loss(fake_output)
+        #         disc_loss = GAN.discriminator_loss(real_output, fake_output)
+
+        #     # Calculate the gradients from the loss and apply them
+        #     gradients_of_generator = gen_tape.gradient(gen_loss, self.generator.trainable_variables)
+        #     self.generator_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
+        # else:
+        #     # gradient tape records results from a function and calculates derivates for it.
         with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
             # Run the generator
             generated_images = self.generator(noise, training=True)
@@ -179,9 +205,9 @@ class GAN:
             # Calculate the loss. We have to do this manually instead of letting keras do it for us with .fit(), since we have to determine the loss
             # based of the discriminator's output.
             gen_loss  = GAN.generator_loss(fake_output)
-            disc_loss = GAN.discriminator_loss(real_output, fake_output)
+            disc_loss = GAN.discriminator_loss(real_output, fake_output, 0.05)
 
-        # Calculate the gradients from the loss.
+        # Calculate the gradients from the loss and apply them
         gradients_of_generator     = gen_tape.gradient(gen_loss,   self.generator.trainable_variables)
         gradients_of_discriminator = disc_tape.gradient(disc_loss, self.discriminator.trainable_variables)
 
@@ -189,7 +215,7 @@ class GAN:
         self.generator_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
         self.discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator, self.discriminator.trainable_variables))
 
-        # For debugging purposes, log the actual percentage of fakes the discriminator marked correctly.
+        # log the actual percentage of fakes the discriminator marked correctly.
         correct_count = 0
         for output in fake_output:
             if output[0] < 0: # Marked as fake, since discriminator outputs a logit.
@@ -219,12 +245,16 @@ class GAN:
 
             loss_sums = [0, 0, 0] # gen_loss, disc_loss, disc_percentage_correct
             batches_in_epoch = 0
+            # throttled_count = 0
+            last_correct_percentage = tf.constant(0, dtype=tf.float64)
 
             for image_batch, label_batch in dataset:
-                losses = self.train_step(image_batch)
+                losses = self.train_step(image_batch, last_correct_percentage )
+                # if (last_correct_percentage > 0.8):
+                #     throttled_count += 1
                 batches_in_epoch += 1
+                last_correct_percentage = losses[2]
                 for i in range(len(losses)): loss_sums[i] += losses[i]
-
             # Save the model and sample images every couple epochs
             if (epoch + 1) % self.save_every == 0:
                 self.checkpoint_manager.save()
@@ -234,6 +264,7 @@ class GAN:
 
             log(log_file, f"Average losses for Epoch {epoch + 1}: (generator: {loss_sums[0]/batches_in_epoch}, discriminator: {loss_sums[1]/batches_in_epoch}).")
             log(log_file, f"Discriminator Accuracy on fakes for Epoch {epoch + 1}: {loss_sums[2]/batches_in_epoch}).")
+            # log(log_file, f"Discriminator throttled {throttled_count} out of {batches_in_epoch} batches.")
 
         # Save after the final epoch
         self.checkpoint_manager.save()
@@ -263,6 +294,13 @@ def log(log_file, message):
     log_file.write(message)
     print(message)
 
+def noisy_labels(label, shape, noise):
+    rtrn = np.full(shape, label)
+    for i in range(shape[0]):
+        if np.random.random() < noise:
+            rtrn[i] = 1 - rtrn[i]
+    return tf.convert_to_tensor(rtrn)
+
 def load_image(file_path):
     """
     Loads an image from a file path into a (tensor image, label) tuple.
@@ -285,9 +323,7 @@ def load_data():
     Returns image data as a tf.data.Dataset
     Pulls data from the given folder.
     """
-    import matplotlib.pyplot as plt
-
-    BATCH_SIZE = 128
+    BATCH_SIZE = 32
 
     # Pull a list of file names matching a glob, in random order.
     image_datset = tf.data.Dataset.list_files(f"{base_dir}/Data/ProcessedImages/Giraffe/*")
