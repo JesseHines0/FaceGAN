@@ -22,7 +22,7 @@ class GAN:
     # This method returns a helper function to compute cross entropy loss
     _cross_entropy = tf.keras.losses.BinaryCrossentropy(
         from_logits=True,
-        label_smoothing=0.2, # Bends labels from 0 and 1 towards 0.5. This is supposed to help regularize somehow.
+        # label_smoothing=0.2, # Bends labels from 0 and 1 towards 0.5. This is supposed to help regularize somehow.
     )
     # A object that sets the initial random weights for the model.
     # Recommended settings from https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/
@@ -162,7 +162,7 @@ class GAN:
         Preforms one training step on one batch. images is a tensor of real images.
         Will run the generator on noise, and the run the discriminator on the images given and the generator output,
         calculating loss of the generator based on how many of its fakes got past the discriminator.
-        Returns a tensor of (gen_loss, disc_loss)
+        Returns a tensor of (gen_loss, disc_loss, disc_percentage_correct)
         """
         noise = tf.random.normal([images.shape[0], self.noise_dim])
 
@@ -189,7 +189,13 @@ class GAN:
         self.generator_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
         self.discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator, self.discriminator.trainable_variables))
 
-        return tf.tuple([gen_loss, disc_loss])
+        # For debugging purposes, log the actual percentage of fakes the discriminator marked correctly.
+        correct_count = 0
+        for output in fake_output:
+            if output[0] < 0: # Marked as fake, since discriminator outputs a logit.
+                correct_count += 1
+
+        return tf.tuple([gen_loss, disc_loss, correct_count / fake_output.shape[0]])
 
     def train(self, dataset, epochs):
         """
@@ -211,21 +217,23 @@ class GAN:
         for epoch in range(epochs):
             start = time.time()
 
-            loss_sums = [0, 0]
+            loss_sums = [0, 0, 0] # gen_loss, disc_loss, disc_percentage_correct
             batches_in_epoch = 0
 
             for image_batch, label_batch in dataset:
                 losses = self.train_step(image_batch)
                 batches_in_epoch += 1
-                loss_sums[0] += losses[0]; loss_sums[1] += losses[1]
+                for i in range(len(losses)): loss_sums[i] += losses[i]
 
             # Save the model and sample images every couple epochs
             if (epoch + 1) % self.save_every == 0:
                 self.checkpoint_manager.save()
                 self.save_sample_images(epoch + 1) # Produce sample_images
 
-            log(log_file, f"Time for Epoch {epoch + 1} is {time.time() - start} sec")
-            log(log_file, f"Average losses for Epoch {epoch + 1} (generator: {loss_sums[0]/batches_in_epoch}, discriminator: {loss_sums[1]/batches_in_epoch}).")
+            log(log_file, f"Time for Epoch {epoch + 1}: {time.time() - start} sec")
+
+            log(log_file, f"Average losses for Epoch {epoch + 1}: (generator: {loss_sums[0]/batches_in_epoch}, discriminator: {loss_sums[1]/batches_in_epoch}).")
+            log(log_file, f"Discriminator Accuracy on fakes for Epoch {epoch + 1}: {loss_sums[2]/batches_in_epoch}).")
 
         # Save after the final epoch
         self.checkpoint_manager.save()
@@ -287,7 +295,7 @@ def load_data():
     # Set `num_parallel_calls` so multiple images are loaded/processed in parallel.
     # num_parallel_calls=tf.data.experimental.AUTOTUNE is supposed to let it adjust dynamically. However, it seems
     # to eat all your memory and then crash.
-    image_datset = image_datset.map(load_image, num_parallel_calls=2)
+    image_datset = image_datset.map(load_image, num_parallel_calls=3)
 
     image_datset = image_datset.batch(BATCH_SIZE)
 
