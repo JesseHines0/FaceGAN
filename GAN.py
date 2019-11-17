@@ -8,6 +8,7 @@ import tensorflow as tf
 import numpy as np
 import math
 import os
+from tensorflow import keras
 from tensorflow.keras import layers
 import time
 from datetime import datetime
@@ -22,7 +23,7 @@ class GAN:
     # class variables
 
     # This method returns a helper function to compute cross entropy loss
-    _cross_entropy = tf.keras.losses.BinaryCrossentropy(
+    _cross_entropy = keras.losses.BinaryCrossentropy(
         from_logits=True,
         # label_smoothing=0.2, # Bends labels from 0 and 1 towards 0.5. This is supposed to help regularize somehow.
     )
@@ -31,7 +32,7 @@ class GAN:
     _r_norm = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02)
 
     def __init__(self,
-        noise_dim = 100, save_every=4, label_noise=0.08,
+        noise_dim = 100, save_every=4, label_noise=0.05,
         log_file=f"{base_dir}/training_log.txt",
         checkpoint_dir=f"{base_dir}/checkpoints"
     ):
@@ -42,10 +43,10 @@ class GAN:
 
         self.generator = self._make_generator_model()
         # Recommended settings from https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/
-        self.generator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5)
+        self.generator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5)
 
         self.discriminator = self._make_discriminator_model()
-        self.discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5)
+        self.discriminator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5)
 
         # For saving the model
         self.checkpoint = tf.train.Checkpoint(
@@ -62,7 +63,7 @@ class GAN:
         The model will take in a noise vector, and output an image.
         """
 
-        model = tf.keras.Sequential()
+        model = keras.Sequential()
         model.add(layers.Dense(8*8*256, use_bias=False, input_shape=(self.noise_dim,), kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
@@ -102,7 +103,7 @@ class GAN:
         The model will take in an image, and return a logit of whether it thinks the image if fake (0) or real (1).
         Run through sigmoid to get the final probability.
         """
-        model = tf.keras.Sequential()
+        model = keras.Sequential()
 
         model.add(layers.Conv2D(64, (5, 5), strides=(1, 1), padding='same', kernel_initializer=GAN._r_norm,
                                     input_shape=[128, 128, 3]))
@@ -262,7 +263,7 @@ class GAN:
             self.log(f"Time for Epoch {epoch + 1}: {time.time() - start} sec")
 
             self.log(f"Average losses for Epoch {epoch + 1}: (generator: {loss_sums[0]/batches_in_epoch}, discriminator: {loss_sums[1]/batches_in_epoch}).")
-            self.log(f"Discriminator Accuracy on fakes for Epoch {epoch + 1}: {loss_sums[2]/batches_in_epoch}).")
+            self.log(f"Discriminator Accuracy on fakes for Epoch {epoch + 1}: {loss_sums[2]/batches_in_epoch}.")
             # self.log(f"Discriminator throttled {throttled_count} out of {batches_in_epoch} batches.")
 
         # Save after the final epoch
@@ -272,7 +273,8 @@ class GAN:
 
     def restore(self):
         """ Tries to restore GAN state from checkpoint. Returns True if restor successful, false otherwise. """
-        self.checkpoint.restore(self.checkpoint_manager.latest_checkpoint)
+        # expect_partial() silences the warnings if you don't use all the restored objects.
+        self.checkpoint.restore(self.checkpoint_manager.latest_checkpoint).expect_partial()
         if self.checkpoint_manager.latest_checkpoint:
             self.log(f"Restored from {self.checkpoint_manager.latest_checkpoint}")
             return True
