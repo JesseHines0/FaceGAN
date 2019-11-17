@@ -28,9 +28,10 @@ class GAN:
     # Recommended settings from https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/
     _r_norm = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02)
 
-    def __init__(self, noise_dim = 100, save_every=4):
+    def __init__(self, noise_dim = 100, save_every=4, label_noise=0.08):
         self.noise_dim = noise_dim
         self.save_every = save_every
+        self.label_noise = label_noise
 
         self.generator = self._make_generator_model()
         # Recommended settings from https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/
@@ -139,10 +140,10 @@ class GAN:
         Determines the loss for the discriminator model.
         real_output is the discriminators output on real images, and fake_output is the discriminators output for fake images
         """
-        real_labels = noisy_labels(1, real_output.shape, noise)
+        real_labels = noisy_labels(tf.constant(1, dtype=tf.float32), real_output.shape, noise)
         real_loss = cls._cross_entropy(real_labels, real_output) # compare real_output against all 1s + noise
 
-        fake_labels = noisy_labels(0, fake_output.shape, noise)
+        fake_labels = noisy_labels(tf.constant(0, dtype=tf.float32), fake_output.shape, noise)
         fake_loss = cls._cross_entropy(fake_labels, fake_output) # compare fake_output against all 0s + noise
 
         total_loss = real_loss + fake_loss
@@ -205,7 +206,7 @@ class GAN:
             # Calculate the loss. We have to do this manually instead of letting keras do it for us with .fit(), since we have to determine the loss
             # based of the discriminator's output.
             gen_loss  = GAN.generator_loss(fake_output)
-            disc_loss = GAN.discriminator_loss(real_output, fake_output, 0.05)
+            disc_loss = GAN.discriminator_loss(real_output, fake_output, self.label_noise)
 
         # Calculate the gradients from the loss and apply them
         gradients_of_generator     = gen_tape.gradient(gen_loss,   self.generator.trainable_variables)
@@ -291,15 +292,13 @@ class GAN:
 
 def log(log_file, message):
     """ Prints to console and logs to logfile. """
-    log_file.write(message)
+    log_file.write(message + "\n")
     print(message)
 
 def noisy_labels(label, shape, noise):
-    rtrn = np.full(shape, label)
-    for i in range(shape[0]):
-        if np.random.random() < noise:
-            rtrn[i] = 1 - rtrn[i]
-    return tf.convert_to_tensor(rtrn)
+    labels = tf.fill(shape, label)
+    flip = lambda e: 1 - e if tf.random.uniform([], minval=0, maxval=1, dtype=tf.float32) < noise else e
+    return tf.map_fn(flip, labels, dtype=tf.float32)
 
 def load_image(file_path):
     """
@@ -323,7 +322,7 @@ def load_data():
     Returns image data as a tf.data.Dataset
     Pulls data from the given folder.
     """
-    BATCH_SIZE = 32
+    BATCH_SIZE = 128
 
     # Pull a list of file names matching a glob, in random order.
     image_datset = tf.data.Dataset.list_files(f"{base_dir}/Data/ProcessedImages/Giraffe/*")
