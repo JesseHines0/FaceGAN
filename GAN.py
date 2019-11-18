@@ -50,7 +50,7 @@ class GAN:
 
         self.generator = self._make_generator_model()
         # Recommended settings from https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/
-        self.generator_optimizer = keras.optimizers.Adam(learning_rate=0.0004, beta_1=0.5)
+        self.generator_optimizer = keras.optimizers.Adam(learning_rate=0.0003, beta_1=0.5)
 
         self.discriminator = self._make_discriminator_model()
         self.discriminator_optimizer = keras.optimizers.Adam(learning_rate=0.0001, beta_1=0.5)
