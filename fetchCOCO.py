@@ -88,15 +88,18 @@ def fetchCategory(category, targetDims, destination):
                 ann['iscrowd'] == 0 and
                 ann['bbox'][2] >= targetDims[0] // 2 and ann['bbox'][3] >= targetDims[1] // 2
             ):
-                # for otherAnn in anns: # collision check
-                #     if ann['id'] != otherAnn['id'] and boxesOverlap(ann['bbox'], otherAnn['bbox']):
-                #         break
-                # else: # no collisions
-                objects.append(ann)
+                for otherAnn in anns: # collision check, if collision take only biggest box.
+                    if (ann['id'] != otherAnn['id'] and
+                        ann['bbox'][2] * ann['bbox'][3] < otherAnn['bbox'][2] * otherAnn['bbox'][3] and
+                        boxesOverlap(ann['bbox'], otherAnn['bbox'])
+                    ):
+                        break
+                else: # no collisions
+                    objects.append(ann)
 
         img = Image.open( imagesDir + images[ image_id ] )
         for objIndex, obj in enumerate(objects):
-            croppedImage = cropImageToBbox(img, obj['bbox'])
+            croppedImage = cropImageToBbox(img, obj['bbox'], targetDims)
 
             resizedImage = resizeImage(croppedImage, targetDims)
 

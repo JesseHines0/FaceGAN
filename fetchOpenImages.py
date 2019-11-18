@@ -91,14 +91,16 @@ def batchImagesForCategory(categoryID, batchSize = 6):
                 not ann['IsDepiction'] and not ann['IsInside'] and not ann['IsGroupOf'] and
                 imageRotations[imageID] == 0 # Not rotated
             ):
-                # for otherAnn in anns: # collision check
-                #     if (ann is not otherAnn and boxesOverlap(
-                #         (ann['xNorm'],      ann['yNorm'],      ann['wNorm'],      ann['hNorm']),
-                #         (otherAnn['xNorm'], otherAnn['yNorm'], otherAnn['wNorm'], otherAnn['hNorm'])
-                #     )):
-                #         break
-                # else: # no collisions
-                objects.append(ann)
+                for otherAnn in anns: # collision check, only show biggest one of overlapping boxes.
+                    if (ann is not otherAnn and
+                        ann['wNorm'] * ann['hNorm'] < otherAnn['wNorm'] * otherAnn['hNorm'] and
+                        boxesOverlap(
+                            (ann['xNorm'],      ann['yNorm'],      ann['wNorm'],      ann['hNorm']),
+                            (otherAnn['xNorm'], otherAnn['yNorm'], otherAnn['wNorm'], otherAnn['hNorm'])
+                    )):
+                        break
+                else: # add the bbbox
+                    objects.append(ann)
 
         if objects:
             batch.append((subset, imageID, objects))
@@ -136,7 +138,7 @@ def fetchCategory(category, targetDims, destination):
                     obj['wNorm'] * img.size[0], obj['hNorm'] * img.size[1]
                 )
                 if bbox[2] >= targetDims[0] // 2 and bbox[3] >= targetDims[1] // 2:
-                    croppedImage = cropImageToBbox(img, bbox)
+                    croppedImage = cropImageToBbox(img, bbox, targetDims)
                     resizedImage = resizeImage(croppedImage, targetDims)
                     resizedImage.save( f"{destination}/OpenImages-{imageId}-sub{objIndex}.jpg" )
                     objIndex += 1

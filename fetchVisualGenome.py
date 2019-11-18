@@ -40,7 +40,7 @@ def fetchCategory(category, targetDims, destination):
         if imageData['coco_id'] == None:
             image = Image.open( BytesIO( requests.get(imageData['url']).content ) )
 
-            image = cropImageToBbox(image, (obj['x'], obj['y'], obj['w'], obj['h']) )
+            image = cropImageToBbox(image, (obj['x'], obj['y'], obj['w'], obj['h']), targetDims)
             image = resizeImage(image, targetDims)
 
             image.save( f"{destination}/VisualGenome-{imageId:08}.jpg" )

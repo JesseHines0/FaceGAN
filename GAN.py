@@ -32,21 +32,28 @@ class GAN:
     _r_norm = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02)
 
     def __init__(self,
-        noise_dim = 100, save_every=4, label_noise=0.05,
+        noise_dim = 100, save_every=4, label_noise=0.025, training_ratio=1/1,
         log_file=f"{base_dir}/training_log.txt",
         checkpoint_dir=f"{base_dir}/checkpoints"
     ):
+        """
+        Initialize a GAN.
+        noise_dim is size of noise vector. save_every is how often to save during training. label_noise is noise applied to noise given to
+        the discriminator. training_ratio is how many times the generator should be trained per each discriminator training. Eg 2 means the
+        generator is trained twice per discriminator update. SHould be >= 1
+        """
         self.noise_dim = noise_dim
         self.save_every = save_every
         self.label_noise = label_noise
+        self.chance_to_skip = 1 - 1 / training_ratio # chance to skip training the discriminator
         self.log_file = log_file
 
         self.generator = self._make_generator_model()
         # Recommended settings from https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/
-        self.generator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5)
+        self.generator_optimizer = keras.optimizers.Adam(learning_rate=0.0004, beta_1=0.5)
 
         self.discriminator = self._make_discriminator_model()
-        self.discriminator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5)
+        self.discriminator_optimizer = keras.optimizers.Adam(learning_rate=0.0001, beta_1=0.5)
 
         # For saving the model
         self.checkpoint = tf.train.Checkpoint(
@@ -69,30 +76,30 @@ class GAN:
         model.add(layers.LeakyReLU())
         assert model.output_shape == (None, 8*8*256) # Note: None is the batch size
 
-        model.add(layers.Reshape((8, 8, 256)))
-        assert model.output_shape == (None, 8, 8, 256)
+        model.add(layers.Reshape((4, 4, 1024)))
+        assert model.output_shape == (None, 4, 4, 1024)
+
+        model.add(layers.Conv2DTranspose(2048, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
+        model.add(layers.BatchNormalization())
+        model.add(layers.LeakyReLU())
+        assert model.output_shape == (None, 8, 8, 2048)
+
+        model.add(layers.Conv2DTranspose(1024, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
+        model.add(layers.BatchNormalization())
+        model.add(layers.LeakyReLU())
+        assert model.output_shape == (None, 16, 16, 1024)
 
         model.add(layers.Conv2DTranspose(512, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
-        assert model.output_shape == (None, 16, 16, 512)
+        assert model.output_shape == (None, 32, 32, 512)
 
         model.add(layers.Conv2DTranspose(256, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
-        assert model.output_shape == (None, 32, 32, 256)
+        assert model.output_shape == (None, 64, 64, 256)
 
-        model.add(layers.Conv2DTranspose(128, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
-        model.add(layers.BatchNormalization())
-        model.add(layers.LeakyReLU())
-        assert model.output_shape == (None, 64, 64, 128)
-
-        model.add(layers.Conv2DTranspose(64, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
-        model.add(layers.BatchNormalization())
-        model.add(layers.LeakyReLU())
-        assert model.output_shape == (None, 128, 128, 64)
-
-        model.add(layers.Conv2DTranspose(3, (5, 5), strides=(1, 1), padding='same', use_bias=False, activation='tanh', kernel_initializer=GAN._r_norm))
+        model.add(layers.Conv2DTranspose(3, (5, 5), strides=(2, 2), padding='same', use_bias=False, activation='tanh', kernel_initializer=GAN._r_norm))
         assert model.output_shape == (None, 128, 128, 3)
 
         return model
@@ -105,36 +112,36 @@ class GAN:
         """
         model = keras.Sequential()
 
-        model.add(layers.Conv2D(64, (5, 5), strides=(1, 1), padding='same', kernel_initializer=GAN._r_norm,
+        model.add(layers.Conv2D(256, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm,
                                     input_shape=[128, 128, 3]))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.2))
-        assert model.output_shape == (None, 128, 128, 64)
-
-        model.add(layers.Conv2D(128, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
-        model.add(layers.BatchNormalization())
-        model.add(layers.LeakyReLU())
-        model.add(layers.Dropout(0.2))
-        assert model.output_shape == (None, 64, 64, 128)
-
-        model.add(layers.Conv2D(256, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
-        model.add(layers.BatchNormalization())
-        model.add(layers.LeakyReLU())
-        model.add(layers.Dropout(0.2))
-        assert model.output_shape == (None, 32, 32, 256)
+        assert model.output_shape == (None, 64, 64, 256)
 
         model.add(layers.Conv2D(512, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.2))
-        assert model.output_shape == (None, 16, 16, 512)
+        assert model.output_shape == (None, 32, 32, 512)
 
         model.add(layers.Conv2D(1024, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.2))
-        assert model.output_shape == (None, 8, 8, 1024)
+        assert model.output_shape == (None, 16, 16, 1024)
+
+        model.add(layers.Conv2D(2048, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
+        model.add(layers.BatchNormalization())
+        model.add(layers.LeakyReLU())
+        model.add(layers.Dropout(0.2))
+        assert model.output_shape == (None, 8, 8, 2048)
+
+        model.add(layers.Conv2D(2048, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
+        model.add(layers.BatchNormalization())
+        model.add(layers.LeakyReLU())
+        model.add(layers.Dropout(0.2))
+        assert model.output_shape == (None, 4, 4, 2048)
 
         model.add(layers.Flatten())
         model.add(layers.Dense(1, kernel_initializer=GAN._r_norm))
@@ -182,7 +189,7 @@ class GAN:
         # throttle = dscr_correct_prcnt > 0.80 # Throttle discriminator, its getting too good.
         # if the descriminator has over 50% accuracy, begin to randomly skip training for it based on dscr_correct_prcnt
         # if dscr_correct_prcnt = 0.5, 0% chance of skip, if dscr_correct_prcnt = 1.0, 50% chance of skip.
-        throttle = dscr_correct_prcnt > 0.5 and tf.random.uniform([], minval=0, maxval=1, dtype=tf.float64) < 1.0 * (dscr_correct_prcnt - 0.5)
+        throttle = tf.random.uniform([], minval=0, maxval=1, dtype=tf.float64) < self.chance_to_skip
 
         if throttle:
             with tf.GradientTape() as gen_tape:
