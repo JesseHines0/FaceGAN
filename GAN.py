@@ -180,49 +180,51 @@ class GAN:
         noise = tf.random.normal([images.shape[0], self.noise_dim])
 
         # throttle = dscr_correct_prcnt > 0.80 # Throttle discriminator, its getting too good.
+        # if the descriminator has over 50% accuracy, begin to randomly skip training for it based on dscr_correct_prcnt
+        # if dscr_correct_prcnt = 0.5, 0% chance of skip, if dscr_correct_prcnt = 1.0, 50% chance of skip.
+        throttle = dscr_correct_prcnt > 0.5 and tf.random.uniform([], minval=0, maxval=1, dtype=tf.float64) < 1.0 * (dscr_correct_prcnt - 0.5)
 
-        # if throttle:
-        #     # gradient tape records results from a function and calculates derivates for it.
-        #     with tf.GradientTape() as gen_tape:
-        #         # Run the generator
-        #         generated_images = self.generator(noise, training=True)
+        if throttle:
+            with tf.GradientTape() as gen_tape:
+                # Run the generator
+                generated_images = self.generator(noise, training=True)
 
-        #         # Let the discriminator try to flag fakes out of our real images and our generated_images
-        #         # https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/ recommends not shuffling real and fake together.
-        #         real_output = self.discriminator(images,           training=False)
-        #         fake_output = self.discriminator(generated_images, training=False)
+                # Let the discriminator try to flag fakes out of our real images and our generated_images
+                # https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/ recommends not shuffling real and fake together.
+                real_output = self.discriminator(images,           training=False)
+                fake_output = self.discriminator(generated_images, training=False)
 
-        #         # Calculate the loss. We have to do this manually instead of letting keras do it for us with .fit(), since we have to determine the loss
-        #         # based of the discriminator's output.
-        #         gen_loss  = GAN.generator_loss(fake_output)
-        #         disc_loss = GAN.discriminator_loss(real_output, fake_output)
+                # Calculate the loss. We have to do this manually instead of letting keras do it for us with .fit(), since we have to determine the loss
+                # based of the discriminator's output.
+                gen_loss  = GAN.generator_loss(fake_output)
+                disc_loss = GAN.discriminator_loss(real_output, fake_output, self.label_noise)
 
-        #     # Calculate the gradients from the loss and apply them
-        #     gradients_of_generator = gen_tape.gradient(gen_loss, self.generator.trainable_variables)
-        #     self.generator_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
-        # else:
-        #     # gradient tape records results from a function and calculates derivates for it.
-        with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
-            # Run the generator
-            generated_images = self.generator(noise, training=True)
+            # Calculate the gradients from the loss and apply them
+            gradients_of_generator = gen_tape.gradient(gen_loss, self.generator.trainable_variables)
+            self.generator_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
+        else:
+            # gradient tape records results from a function and calculates derivates for it.
+            with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+                # Run the generator
+                generated_images = self.generator(noise, training=True)
 
-            # Let the discriminator try to flag fakes out of our real images and our generated_images
-            # https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/ recommends not shuffling real and fake together.
-            real_output = self.discriminator(images,           training=True)
-            fake_output = self.discriminator(generated_images, training=True)
+                # Let the discriminator try to flag fakes out of our real images and our generated_images
+                # https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/ recommends not shuffling real and fake together.
+                real_output = self.discriminator(images,           training=True)
+                fake_output = self.discriminator(generated_images, training=True)
 
-            # Calculate the loss. We have to do this manually instead of letting keras do it for us with .fit(), since we have to determine the loss
-            # based of the discriminator's output.
-            gen_loss  = GAN.generator_loss(fake_output)
-            disc_loss = GAN.discriminator_loss(real_output, fake_output, self.label_noise)
+                # Calculate the loss. We have to do this manually instead of letting keras do it for us with .fit(), since we have to determine the loss
+                # based of the discriminator's output.
+                gen_loss  = GAN.generator_loss(fake_output)
+                disc_loss = GAN.discriminator_loss(real_output, fake_output, self.label_noise)
 
-        # Calculate the gradients from the loss and apply them
-        gradients_of_generator     = gen_tape.gradient(gen_loss,   self.generator.trainable_variables)
-        gradients_of_discriminator = disc_tape.gradient(disc_loss, self.discriminator.trainable_variables)
+            # Calculate the gradients from the loss and apply them
+            gradients_of_generator     = gen_tape.gradient(gen_loss,   self.generator.trainable_variables)
+            gradients_of_discriminator = disc_tape.gradient(disc_loss, self.discriminator.trainable_variables)
 
-        # Apply the gradients to the models.
-        self.generator_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
-        self.discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator, self.discriminator.trainable_variables))
+            # Apply the gradients to the models.
+            self.generator_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
+            self.discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator, self.discriminator.trainable_variables))
 
         # log the actual percentage of fakes the discriminator marked correctly.
         correct_count = 0
@@ -353,7 +355,7 @@ def load_data():
     Returns image data as a tf.data.Dataset
     Pulls data from the given folder.
     """
-    BATCH_SIZE = 128
+    BATCH_SIZE = 1
 
     # Pull a list of file names matching a glob, in random order.
     image_datset = tf.data.Dataset.list_files(f"{base_dir}/Data/ProcessedImages/Giraffe/*")
