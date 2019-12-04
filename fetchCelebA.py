@@ -37,10 +37,6 @@ def fetch(targetDims, destination):
         image = Image.open( imagesDir + filename )
         image = image.resize(targetDims, Image.ANTIALIAS)
 
-        batchFolder = f"{destination}/batch{index // 1000}"
-        if not os.path.exists(batchFolder):
-            os.makedirs(batchFolder)
-
-        image.save( f"{batchFolder}/{filename}" )
+        image.save( f"{destination}/{filename}" )
 
     print(f"DONE! Processed all CelebA images.")

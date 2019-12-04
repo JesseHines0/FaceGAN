@@ -94,8 +94,14 @@ class GAN:
         model.add(layers.LeakyReLU())
         assert model.output_shape == (None, 32, 32, 256)
 
+        model.add(layers.Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
+        model.add(layers.BatchNormalization())
+        model.add(layers.LeakyReLU())
+        assert model.output_shape == (None, 64, 64, 128)
+
+        # layer to convert into RGB
         model.add(layers.Conv2DTranspose(3, (1, 1), strides=(1, 1), padding='same', use_bias=False, activation='tanh', kernel_initializer=GAN._r_norm))
-        assert model.output_shape == (None, 32, 32, 3)
+        assert model.output_shape == (None, 64, 64, 3)
 
         return model
 
@@ -107,8 +113,14 @@ class GAN:
         """
         model = keras.Sequential()
 
-        model.add(layers.Conv2D(256, (3, 3), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm,
-                                    input_shape=[32, 32, 3]))
+        model.add(layers.Conv2D(128, (3, 3), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm,
+                                    input_shape=[64, 64, 3]))
+        model.add(layers.BatchNormalization())
+        model.add(layers.LeakyReLU())
+        model.add(layers.Dropout(0.2))
+        assert model.output_shape == (None, 32, 32, 128)
+
+        model.add(layers.Conv2D(256, (3, 3), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.2))
@@ -350,10 +362,10 @@ def load_data(directory):
     Returns image data as a tf.data.Dataset
     Pulls data from the given folder.
     """
-    BATCH_SIZE = 1
+    BATCH_SIZE = 128
 
     # Pull a list of file names matching a glob, in random order.
-    image_datset = tf.data.Dataset.list_files(f"{directory}/*/*")
+    image_datset = tf.data.Dataset.list_files(f"{directory}/*")
 
     # Set `num_parallel_calls` so multiple images are loaded/processed in parallel.
     # num_parallel_calls=tf.data.experimental.AUTOTUNE is supposed to let it adjust dynamically. However, it seems
