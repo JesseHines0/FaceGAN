@@ -50,10 +50,10 @@ class GAN:
 
         self.generator = self._make_generator_model()
         # Recommended settings from https://machinelearningmastery.com/how-to-code-generative-adversarial-network-hacks/
-        self.generator_optimizer = keras.optimizers.Adam(learning_rate=0.0003, beta_1=0.5)
+        self.generator_optimizer = keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5)
 
         self.discriminator = self._make_discriminator_model()
-        self.discriminator_optimizer = keras.optimizers.Adam(learning_rate=0.0001, beta_1=0.5)
+        self.discriminator_optimizer = keras.optimizers.Adam(learning_rate=0.00004, beta_1=0.5)
 
         # For saving the model
         self.checkpoint = tf.train.Checkpoint(
@@ -79,22 +79,22 @@ class GAN:
         model.add(layers.Reshape((4, 4, 1024)))
         assert model.output_shape == (None, 4, 4, 1024)
 
-        model.add(layers.Conv2DTranspose(1024, (3, 3), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
+        model.add(layers.Conv2DTranspose(1024, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
         assert model.output_shape == (None, 8, 8, 1024)
 
-        model.add(layers.Conv2DTranspose(512, (3, 3), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
+        model.add(layers.Conv2DTranspose(512, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
         assert model.output_shape == (None, 16, 16, 512)
 
-        model.add(layers.Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
+        model.add(layers.Conv2DTranspose(256, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
         assert model.output_shape == (None, 32, 32, 256)
 
-        model.add(layers.Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
+        model.add(layers.Conv2DTranspose(128, (5, 5), strides=(2, 2), padding='same', use_bias=False, kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
         assert model.output_shape == (None, 64, 64, 128)
@@ -113,20 +113,20 @@ class GAN:
         """
         model = keras.Sequential()
 
-        model.add(layers.Conv2D(128, (3, 3), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm,
+        model.add(layers.Conv2D(128, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm,
                                     input_shape=[64, 64, 3]))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.2))
         assert model.output_shape == (None, 32, 32, 128)
 
-        model.add(layers.Conv2D(256, (3, 3), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
+        model.add(layers.Conv2D(256, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.2))
         assert model.output_shape == (None, 16, 16, 256)
 
-        model.add(layers.Conv2D(512, (3, 3), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
+        model.add(layers.Conv2D(512, (5, 5), strides=(2, 2), padding='same', kernel_initializer=GAN._r_norm))
         model.add(layers.BatchNormalization())
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.2))
