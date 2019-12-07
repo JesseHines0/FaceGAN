@@ -3,3 +3,5 @@ checkpoints/*
 sample_images/*
 __pycache__
 .vscode
+
+*~
