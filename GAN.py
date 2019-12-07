@@ -306,9 +306,16 @@ class GAN:
         images = tf.dtypes.cast(images, tf.uint8)
         return images
 
-    def generateAndEvaluate(self, count):
-        """ Returns an list of (generated image, discriminator output). Discriminator output is True if real, False if fake. """
-        noise = tf.random.normal([count, self.noise_dim])
+    def generateAndEvaluate(self, count, truncate = False):
+        """
+        Returns an list of (generated image, discriminator output).
+        Discriminator output is True if real, False if fake.
+        If truncation is true, truncates the noise vector.
+        """
+        if truncate:
+            noise = tf.random.truncated_normal([count, self.noise_dim])
+        else:
+            noise = tf.random.normal([count, self.noise_dim])
 
         images = self.generator(noise, training=False)
         evaluations = self.discriminator(images, training=False)

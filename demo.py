@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 # settings
 interpolation = 'none' # catrom
 filterImages  = True
+truncate = True
 
 print("Loading GAN...")
 gan = GAN(
@@ -19,7 +20,7 @@ plt.yticks([])
 plt.grid(False)
 
 while plt.get_fignums():
-    output = gan.generateAndEvaluate(10)
+    output = gan.generateAndEvaluate(10, truncate=truncate)
 
     i = 0
     while plt.get_fignums() and i < len(output):
