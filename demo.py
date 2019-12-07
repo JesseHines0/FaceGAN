@@ -1,19 +1,39 @@
-from GAN import *
+from GAN import GAN
+import matplotlib.pyplot as plt
+
+# settings
+interpolation = 'none' # catrom
+filterImages  = True
 
 print("Loading GAN...")
 gan = GAN(
     log_file=None,
-    checkpoint_dir = f"checkpoints/celebA64v2_epoch90",
+    checkpoint_dir = f"checkpoints/celebA64v2_epoch124",
 )
 gan.restore()
 print("Displaying samples...")
 
-
-image = gan.generate(1)[0]
-fig = plt.imshow(image)
+fig = plt.imshow([[[0, 0, 0]]], interpolation=interpolation)
+plt.xticks([])
+plt.yticks([])
+plt.grid(False)
 
 while plt.get_fignums():
-    image = gan.generate(1)[0]
-    fig.set_data(image)
-    plt.pause(2)
+    output = gan.generateAndEvaluate(10)
 
+    i = 0
+    while plt.get_fignums() and i < len(output):
+        image, fooled = output[i]
+
+        if (not filterImages) or fooled:
+            fig.set_data(image)
+
+            if fooled:
+                plt.xlabel("Fooled Discriminator", fontdict={'color': 'green'})
+            else:
+                plt.xlabel("Did not fool Discriminator", fontdict={'color': 'red'})
+
+
+            plt.pause(2)
+
+        i += 1
