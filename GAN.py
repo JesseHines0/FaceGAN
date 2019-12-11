@@ -13,7 +13,7 @@ from tensorflow.keras import layers
 import time
 from datetime import datetime
 
-from IPython import display
+# from IPython import display
 import matplotlib.pyplot as plt
 
 class GAN:
